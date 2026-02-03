@@ -1,0 +1,6 @@
+@MsignProxy_HostAddress = http://localhost:5211
+
+GET {{MsignProxy_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
