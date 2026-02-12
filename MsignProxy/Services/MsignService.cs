@@ -13,16 +13,28 @@ namespace MsignProxy.Services
     {
         Task<SignInitiateResponse> StartSigningProcess(SignRequestDto dto);
         Task<SignResponse> GetStatus(string requestId);
+
+        Task<SignResponse> GetFinalSignData(string requestId);
     }
 
     public class MsignService : IMSignService
     {
         private MSignClient _client;
 
-        public MsignService(IWebHostEnvironment env , IConfiguration configuration)
+        // Пример безопасного разрешения пути сертификата
+        public MsignService(IWebHostEnvironment env, IConfiguration configuration)
         {
-            string certPath = configuration["MSignConfig:CertPath"]!;
-            string certPassword = configuration["MSignConfig:CertPassword"]!;
+            var certPathConfigured = configuration["MSignConfig:CertPath"]!;
+            var certPassword = configuration["MSignConfig:CertPassword"]!;
+
+            // Если в конфигурации относительный путь, привязать к ContentRootPath
+            var certPath = Path.IsPathRooted(certPathConfigured)
+                ? certPathConfigured
+                : Path.Combine(env.ContentRootPath ?? AppContext.BaseDirectory, certPathConfigured);
+
+            if (!File.Exists(certPath))
+                throw new FileNotFoundException($"Сертификат не найден! Ожидаемый путь: {certPath}");
+
             var certificate = new X509Certificate2(certPath, certPassword);
 
             // Создаём клиент по умолчанию, затем корректируем binding/endpoint если необходимо
@@ -72,16 +84,24 @@ namespace MsignProxy.Services
 
             string idSign = await _client.PostSignRequestAsync(request);
 
+            string encodeReturnUrl = System.Net.WebUtility.UrlEncode(dto.ReturnUrl);
+
             return new SignInitiateResponse
             {
                 IdSign = idSign,
-                RedirectUrl = $"https://msign.staging.egov.md/start?requestid={idSign}"
+                RedirectUrl = $"https://msign.staging.egov.md/{idSign}?returnUrl={encodeReturnUrl}"
             };
         }
 
         public async Task<SignResponse> GetStatus(string requestId)
         {
             return await _client.GetSignResponseAsync(requestId, "en");
+        }
+
+        public async Task<SignResponse> GetFinalSignData(string requestId)
+        {
+            var response = await _client.GetSignResponseAsync(requestId, "en");
+            return response;
         }
     }
 }

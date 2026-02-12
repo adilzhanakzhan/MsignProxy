@@ -18,9 +18,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.UseAuthorization();
+
+app.MapGet("/", () => "MsignProxy API is running! Visit /swagger for API documentation.");
 
 app.MapControllers();
 

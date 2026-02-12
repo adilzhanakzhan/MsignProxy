@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  msignproxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: msignproxy
+    ports:
+      - "8080:80"      # Map host port 8080 to container port 80
+      - "8443:443"     # Map host port 8443 to container port 443 (if using HTTPS)
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+    volumes:
+      # Optional: mount appsettings for easy configuration changes without rebuild
+      - ./appsettings.Production.json:/app/appsettings.Production.json:ro
+      # Optional: mount logs folder to persist logs
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - msign-network
+
+networks:
+  msign-network:
+    driver: bridge

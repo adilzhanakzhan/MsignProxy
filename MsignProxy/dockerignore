@@ -1,0 +1,14 @@
+**/.git
+**/.gitignore
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/node_modules
+**/.idea
+**/*.user
+**/*.suo
+**/launchSettings.json
+**/.env
+**/logs
+!**/Certificates/*.pfx
