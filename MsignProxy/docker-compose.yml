@@ -1,10 +1,10 @@
-version: '3.8'
+#version: '3.8'
 
 services:
   msignproxy:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: MsignProxy/Dockerfile
     container_name: msignproxy
     ports:
       - "8080:80"      # Map host port 8080 to container port 80
@@ -12,15 +12,23 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
+      - MSignConfig__CertPassword=1076
     volumes:
       # Optional: mount appsettings for easy configuration changes without rebuild
       - ./appsettings.Production.json:/app/appsettings.Production.json:ro
       # Optional: mount logs folder to persist logs
       - ./logs:/app/logs
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks:
       - msign-network
 
 networks:
   msign-network:
     driver: bridge
+

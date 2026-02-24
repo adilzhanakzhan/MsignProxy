@@ -1,14 +1,23 @@
 using MsignProxy.Services;
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+//Logging
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole(option =>
+{
+    option.FormatterName = "simple";
+});
+builder.Logging.AddDebug();
 
+// Add services to the container.
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddScoped<IMSignService,MsignService>();
+builder.Services.AddSingleton<IMSignService,MsignService>();
+
+builder.Services.AddHealthChecks();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -23,6 +32,8 @@ if (app.Environment.IsDevelopment())
 app.UseAuthorization();
 
 app.MapGet("/", () => "MsignProxy API is running! Visit /swagger for API documentation.");
+
+app.MapHealthChecks("/health");
 
 app.MapControllers();
 

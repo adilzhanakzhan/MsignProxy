@@ -28,5 +28,7 @@ FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
 
-COPY MsignProxy/Certificates/1076_elma365test.cgps.pki.gov.md_eSystems-Trust.pfx .
+#COPY MsignProxy/Certificates/1076_elma365test.cgps.pki.gov.md_eSystems-Trust.pfx .
+#COPY Certificates/1076_elma365test.cgps.pki.gov.md_eSystems-Trust.pfx ./Certificates/
+COPY MsignProxy/Certificates/1076_elma365test.cgps.pki.gov.md_eSystems-Trust.pfx ./Certificates/
 ENTRYPOINT ["dotnet", "MsignProxy.dll"]
