@@ -5,13 +5,16 @@ using System.ServiceModel;
 using System.ServiceModel.Security;
 using Polly;
 using Polly.Retry;
+using System.Security.Cryptography.Pkcs;
 
 namespace MsignProxy.Services
 {
     public interface IMSignService
     {
         Task<SignInitiateResponse> StartSigningProcess(SignRequestDto dto);
-        Task<SignResponse> GetSignResponse(string requestId);
+        //Task<SignResponse> GetSignResponse(string requestId);
+        Task<object> GetSignResponse(string requestId);
+
     }
 
     public class MsignService : IMSignService, IDisposable
@@ -172,7 +175,7 @@ namespace MsignProxy.Services
             };
         }
 
-        public async Task<SignResponse> GetSignResponse(string requestId)
+        public async Task<object> GetSignResponse(string requestId)
         {
             _logger.LogInformation("Fetching sign response for RequestId: {RequestId}", requestId);
 
@@ -186,9 +189,82 @@ namespace MsignProxy.Services
                 "Sign response retrieved. RequestId: {RequestId}, Status: {Status}",
                 requestId, response.Status);
 
-            return response;
-        }
+            string? certBase64 = null;
+            try
+            {
+                var result = response.Results?.FirstOrDefault();
 
+                if (result?.Certificate != null && result.Certificate.Length > 0)
+                {
+                    // Certificate came directly from MSign — use it
+                    certBase64 = Convert.ToBase64String(result.Certificate);
+                    _logger.LogInformation("Certificate taken directly from MSign response.");
+                }
+                else if (result?.Signature != null && result.Signature.Length > 0)
+                {
+                    // Certificate is empty — extract it from the signature blob
+                    _logger.LogInformation("Certificate empty in response, extracting from signature...");
+                        certBase64 = ExtractCertFromPadesPdf(result.Signature);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Could not extract certificate from signature: {Error}", ex.Message);
+            }
+
+            return new
+            {
+                status = response.Status,
+                message = response.Message,
+                results = response.Results,
+                certificate = certBase64
+            };
+        }
+        private string? ExtractCertFromPadesPdf(byte[] pdfBytes)
+        {
+            // PAdES stores the PKCS#7 signature as hex inside /Contents <...>
+            // We scan the raw bytes to find it
+            var pdfString = System.Text.Encoding.Latin1.GetString(pdfBytes);
+
+            var marker = "/Contents <";
+            var start = pdfString.IndexOf(marker, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                _logger.LogWarning("Could not find /Contents marker in PDF.");
+                return null;
+            }
+
+            start += marker.Length;
+            var end = pdfString.IndexOf('>', start);
+            if (end < 0)
+            {
+                _logger.LogWarning("Could not find end of /Contents in PDF.");
+                return null;
+            }
+
+            // The hex string between < and > is the raw PKCS#7/CMS blob
+            var hexContent = pdfString.Substring(start, end - start).Trim();
+
+            // Remove null padding (PDF pads /Contents with 00s)
+            hexContent = hexContent.TrimEnd('0');
+            if (hexContent.Length % 2 != 0)
+                hexContent += "0";
+
+            var pkcs7Bytes = Convert.FromHexString(hexContent);
+
+            var signedCms = new SignedCms();
+            signedCms.Decode(pkcs7Bytes);
+
+            var cert = signedCms.SignerInfos[0].Certificate;
+            if (cert == null)
+            {
+                _logger.LogWarning("No certificate found in PKCS#7 SignerInfo.");
+                return null;
+            }
+
+            _logger.LogInformation("Certificate extracted from PAdES. Subject: {Subject}", cert.Subject);
+            return Convert.ToBase64String(cert.RawData);
+        }
         // ── Dispose ───────────────────────────────────────────────────────
         public void Dispose()
         {
